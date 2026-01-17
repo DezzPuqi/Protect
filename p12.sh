@@ -153,7 +153,7 @@ cat > "$TARGET_FILE" << 'EOF'
         cta.href = tgLink;
         cta.target = "_blank";
         cta.rel = "noopener";
-        cta.innerText = "BUKA BOT";
+        cta.innerText = "BUKA BOT (t.me/SiDezzBot)";
         Object.assign(cta.style, {
           display: "block",
           marginTop: "14px",

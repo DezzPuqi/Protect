@@ -1,17 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 
-# =========================
-# Protect Panel By Dezz - PLTA + Logs (Admin ID 1 Only)
-# NO Kernel.php touched.
-# =========================
+# ==========================================================
+# Protect Panel By Dezz - PLTA Logs under /admin/api/plta
+# - Admin ID 1 only (HARD LOCK)
+# - 403 HTML style like lock nest
+# - Sidebar button uses route()
+# - NO Kernel.php touched
+# ==========================================================
 
 PANEL_DIR="/var/www/pterodactyl"
 ROUTES_FILE="${PANEL_DIR}/routes/admin.php"
 
-CTRL_DIR="${PANEL_DIR}/app/Http/Controllers/Admin/Plta"
+CTRL_DIR="${PANEL_DIR}/app/Http/Controllers/Admin/Api"
 MODEL_DIR="${PANEL_DIR}/app/Models"
-VIEW_DIR="${PANEL_DIR}/resources/views/admin/plta"
+VIEW_DIR="${PANEL_DIR}/resources/views/admin/api/plta"
 MIG_DIR="${PANEL_DIR}/database/migrations"
 
 TIMESTAMP="$(date -u +"%Y-%m-%d-%H-%M-%S")"
@@ -32,7 +35,7 @@ banner() {
   echo -e "${RED}${BOLD}    <title>PROTECT PANEL</title>${NC}"
   echo -e "${RED}${BOLD}  </head>${NC}"
   echo -e "${RED}${BOLD}  <body>${NC}"
-  echo -e "${RED}${BOLD}    <h1>⛔ PLTA MODULE + LOGS ENABLED</h1>${NC}"
+  echo -e "${RED}${BOLD}    <h1>⛔ PLTA LOGS ENABLED (/admin/api/plta)</h1>${NC}"
   echo -e "${WHT}${BOLD}    <p>WM: Protect Panel By Dezz</p>${NC}"
   echo -e "${RED}${BOLD}  </body>${NC}"
   echo -e "${RED}${BOLD}</html>${NC}"
@@ -49,17 +52,14 @@ spin() {
   local pid
   local s='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
   local i=0
-
   echo -ne "${BLU}${BOLD}${msg}${NC} ${DIM}${s:0:1}${NC}"
   ("$@") >/dev/null 2>&1 &
   pid=$!
-
   while kill -0 "$pid" 2>/dev/null; do
     i=$(( (i + 1) % 10 ))
     echo -ne "\r${BLU}${BOLD}${msg}${NC} ${DIM}${s:$i:1}${NC}"
     sleep 0.08
   done
-
   wait "$pid"
   echo -ne "\r${BLU}${BOLD}${msg}${NC} ${GRN}DONE${NC}\n"
 }
@@ -68,7 +68,7 @@ on_error() {
   local code=$?
   echo
   fail "Installer gagal (exit code: $code)"
-  echo -e "${DIM}Pastikan jalan sebagai root / folder panel benar: ${PANEL_DIR}${NC}"
+  echo -e "${DIM}Pastikan jalan sebagai root & path panel benar: ${PANEL_DIR}${NC}"
   exit "$code"
 }
 trap on_error ERR
@@ -88,7 +88,6 @@ info "Panel Dir : ${BOLD}${PANEL_DIR}${NC}"
 info "Time UTC  : ${BOLD}${TIMESTAMP}${NC}"
 hr
 
-# sanity
 if [ ! -d "$PANEL_DIR" ]; then
   fail "Folder panel tidak ditemukan: $PANEL_DIR"
   exit 1
@@ -103,14 +102,19 @@ chmod 755 "$CTRL_DIR" "$VIEW_DIR" || true
 
 backup_if_exists "$ROUTES_FILE"
 
-# backup target files if exist
-backup_if_exists "${CTRL_DIR}/PltaController.php"
-backup_if_exists "${MODEL_DIR}/PltaLog.php"
-backup_if_exists "${VIEW_DIR}/index.blade.php"
-backup_if_exists "${VIEW_DIR}/logs.blade.php"
+# targets
+CTRL_FILE="${CTRL_DIR}/PltaController.php"
+MODEL_FILE="${MODEL_DIR}/PltaLog.php"
+VIEW_INDEX="${VIEW_DIR}/index.blade.php"
+VIEW_LOGS="${VIEW_DIR}/logs.blade.php"
+
+backup_if_exists "$CTRL_FILE"
+backup_if_exists "$MODEL_FILE"
+backup_if_exists "$VIEW_INDEX"
+backup_if_exists "$VIEW_LOGS"
 
 hr
-info "Menulis Model + Controller + Views + Migration..."
+info "Menulis Migration + Model + Controller + Views..."
 hr
 
 # =========================
@@ -130,11 +134,11 @@ return new class extends Migration
     {
         Schema::create('plta_logs', function (Blueprint $table) {
             $table->id();
-            $table->string('pltaown', 191)->index();              // contoh: plta_kkwkwkkkd
-            $table->string('usernameown', 191);                  // contoh: Dezz
-            $table->string('lastcreate', 191)->nullable();       // contoh: TestUser1 (kalau kosong => "-")
-            $table->string('quota', 64)->nullable();             // contoh: 1Gb (kalau kosong => "-")
-            $table->unsignedBigInteger('created_by')->nullable();// user_id yang input log
+            $table->string('pltaown', 191)->index();              // plta_kkwkwkkkd
+            $table->string('usernameown', 191);                  // Dezz
+            $table->string('lastcreate', 191)->nullable();       // TestUser1 (kosong => "-")
+            $table->string('quota', 64)->nullable();             // 1Gb (kosong => "-")
+            $table->unsignedBigInteger('created_by')->nullable();// user_id input
             $table->timestamps();
         });
     }
@@ -150,7 +154,7 @@ chmod 644 "$MIG_FILE"
 # =========================
 # Model
 # =========================
-cat > "${MODEL_DIR}/PltaLog.php" <<'EOF'
+cat > "$MODEL_FILE" <<'EOF'
 <?php
 
 namespace Pterodactyl\Models;
@@ -170,15 +174,15 @@ class PltaLog extends Model
     ];
 }
 EOF
-chmod 644 "${MODEL_DIR}/PltaLog.php"
+chmod 644 "$MODEL_FILE"
 
 # =========================
-# Controller
+# Controller: Admin\Api\PltaController
 # =========================
-cat > "${CTRL_DIR}/PltaController.php" <<'EOF'
+cat > "$CTRL_FILE" <<'EOF'
 <?php
 
-namespace Pterodactyl\Http\Controllers\Admin\Plta;
+namespace Pterodactyl\Http\Controllers\Admin\Api;
 
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -282,7 +286,7 @@ class PltaController extends Controller
     <div class="top">
       <div class="sig">⛔</div>
       <div>
-        <h1 class="glow">ACCESS DENIED — PLTA MODULE LOCKED</h1>
+        <h1 class="glow">ACCESS DENIED — PLTA LOGS LOCKED</h1>
         <div class="sub">This area is protected. Only <b>Admin ID 1</b> is allowed.</div>
       </div>
     </div>
@@ -290,14 +294,14 @@ class PltaController extends Controller
     <div class="mid">
       <div class="code">
 HTTP/1.1 403 Forbidden<br/>
-Module: Admin / PLTA<br/>
+Module: Admin / API / PLTA<br/>
 Rule: Only user_id == 1<br/>
 Action: Request blocked
       </div>
 
       <div class="pillbar">
-        <div class="pill">/admin/plta</div>
-        <div class="pill">/admin/plta/logs</div>
+        <div class="pill">/admin/api/plta</div>
+        <div class="pill">/admin/api/plta/logs</div>
       </div>
     </div>
 
@@ -317,7 +321,7 @@ HTML;
     {
         $recent = PltaLog::query()->latest('id')->limit(10)->get();
 
-        return view('admin.plta.index', [
+        return view('admin.api.plta.index', [
             'recent' => $recent,
         ]);
     }
@@ -337,7 +341,7 @@ HTML;
             ->paginate(25)
             ->appends(['q' => $q]);
 
-        return view('admin.plta.logs', [
+        return view('admin.api.plta.logs', [
             'logs' => $logs,
             'q' => $q,
         ]);
@@ -354,27 +358,26 @@ HTML;
 
         $data = $v->validate();
 
-        // normalize: kosong => null biar view tampil "-"
         $data['lastcreate'] = isset($data['lastcreate']) && trim($data['lastcreate']) !== '' ? trim($data['lastcreate']) : null;
-        $data['quota'] = isset($data['quota']) && trim($data['quota']) !== '' ? trim($data['quota']) : null;
+        $data['quota']      = isset($data['quota']) && trim($data['quota']) !== '' ? trim($data['quota']) : null;
         $data['created_by'] = Auth::id();
 
         PltaLog::query()->create($data);
 
-        return redirect()->route('admin.plta.index')->with('success', 'PLTA log berhasil ditambah.');
+        return redirect()->route('admin.api.plta.index')->with('success', 'PLTA log berhasil ditambah.');
     }
 }
 EOF
-chmod 644 "${CTRL_DIR}/PltaController.php"
+chmod 644 "$CTRL_FILE"
 
 # =========================
 # Views
 # =========================
-cat > "${VIEW_DIR}/index.blade.php" <<'EOF'
+cat > "$VIEW_INDEX" <<'EOF'
 @extends('layouts.admin')
 
 @section('title')
-    PLTA
+    PLTA Logs
 @endsection
 
 @section('content-header')
@@ -388,13 +391,14 @@ cat > "${VIEW_DIR}/index.blade.php" <<'EOF'
 
     <div class="nav-tabs-custom">
         <ul class="nav nav-tabs">
-            <li class="active"><a href="{{ route('admin.plta.index') }}">Create</a></li>
-            <li><a href="{{ route('admin.plta.logs') }}">Logs</a></li>
+            <li class="active"><a href="{{ route('admin.api.plta.index') }}">Create</a></li>
+            <li><a href="{{ route('admin.api.plta.logs') }}">Logs</a></li>
         </ul>
 
         <div class="tab-content">
             <div class="tab-pane active">
-                <form method="POST" action="{{ route('admin.plta.store') }}">
+
+                <form method="POST" action="{{ route('admin.api.plta.store') }}">
                     @csrf
 
                     <div class="row">
@@ -418,19 +422,19 @@ cat > "${VIEW_DIR}/index.blade.php" <<'EOF'
 
                                     <div class="form-group">
                                         <label>lastcreate (username root panel)</label>
-                                        <input name="lastcreate" class="form-control" placeholder="TestUser1 / boleh kosong" value="{{ old('lastcreate') }}">
+                                        <input name="lastcreate" class="form-control" placeholder="TestUser1 / kosong = -" value="{{ old('lastcreate') }}">
                                         @error('lastcreate') <p class="text-danger">{{ $message }}</p> @enderror
                                     </div>
 
                                     <div class="form-group">
                                         <label>quota</label>
-                                        <input name="quota" class="form-control" placeholder="1Gb / boleh kosong" value="{{ old('quota') }}">
+                                        <input name="quota" class="form-control" placeholder="1Gb / kosong = -" value="{{ old('quota') }}">
                                         @error('quota') <p class="text-danger">{{ $message }}</p> @enderror
                                     </div>
                                 </div>
                                 <div class="box-footer">
                                     <button class="btn btn-primary" type="submit">Save Log</button>
-                                    <a class="btn btn-default" href="{{ route('admin.plta.logs') }}">Open Logs</a>
+                                    <a class="btn btn-default" href="{{ route('admin.api.plta.logs') }}">Open Logs</a>
                                 </div>
                             </div>
                         </div>
@@ -467,21 +471,22 @@ cat > "${VIEW_DIR}/index.blade.php" <<'EOF'
                                     </table>
                                 </div>
                                 <div class="box-footer">
-                                    Contoh: <code>plta_kkwkwkkkd | Dezz | TestUser1 | non_admin/admin | 1Gb</code>
+                                    Contoh: <code>plta_kkwkwkkkd | Dezz | TestUser1 | 1Gb</code>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                 </form>
+
             </div>
         </div>
     </div>
 @endsection
 EOF
-chmod 644 "${VIEW_DIR}/index.blade.php"
+chmod 644 "$VIEW_INDEX"
 
-cat > "${VIEW_DIR}/logs.blade.php" <<'EOF'
+cat > "$VIEW_LOGS" <<'EOF'
 @extends('layouts.admin')
 
 @section('title')
@@ -495,20 +500,20 @@ cat > "${VIEW_DIR}/logs.blade.php" <<'EOF'
 @section('content')
     <div class="nav-tabs-custom">
         <ul class="nav nav-tabs">
-            <li><a href="{{ route('admin.plta.index') }}">Create</a></li>
-            <li class="active"><a href="{{ route('admin.plta.logs') }}">Logs</a></li>
+            <li><a href="{{ route('admin.api.plta.index') }}">Create</a></li>
+            <li class="active"><a href="{{ route('admin.api.plta.logs') }}">Logs</a></li>
         </ul>
 
         <div class="tab-content">
             <div class="tab-pane active">
 
-                <form method="GET" action="{{ route('admin.plta.logs') }}" class="row" style="margin-bottom: 10px;">
+                <form method="GET" action="{{ route('admin.api.plta.logs') }}" class="row" style="margin-bottom: 10px;">
                     <div class="col-md-6">
                         <div class="input-group">
                             <input class="form-control" name="q" value="{{ $q }}" placeholder="Search pltaown / owner / lastcreate / quota">
                             <span class="input-group-btn">
                                 <button class="btn btn-primary" type="submit">Search</button>
-                                <a class="btn btn-default" href="{{ route('admin.plta.logs') }}">Reset</a>
+                                <a class="btn btn-default" href="{{ route('admin.api.plta.logs') }}">Reset</a>
                             </span>
                         </div>
                     </div>
@@ -558,37 +563,59 @@ cat > "${VIEW_DIR}/logs.blade.php" <<'EOF'
     </div>
 @endsection
 EOF
-chmod 644 "${VIEW_DIR}/logs.blade.php"
+chmod 644 "$VIEW_LOGS"
 
 # =========================
-# Patch routes/admin.php (append once)
+# Routes patch (safe marker)
 # =========================
-MARKER_START="/* === PLTA MODULE (Protect Panel By Dezz) START === */"
-MARKER_END="/* === PLTA MODULE (Protect Panel By Dezz) END === */"
+MARKER_START="/* === PLTA API LOGS (Protect Panel By Dezz) START === */"
+MARKER_END="/* === PLTA API LOGS (Protect Panel By Dezz) END === */"
 
 if grep -qF "$MARKER_START" "$ROUTES_FILE"; then
-  warn "routes/admin.php sudah ada PLTA block, skip patch routes."
+  warn "routes/admin.php sudah ada PLTA API block, skip."
 else
   spin "Patch routes/admin.php..." bash -c "cat >> '$ROUTES_FILE' <<'ROUTES'
 
 ${MARKER_START}
-Route::group(['prefix' => 'plta', 'as' => 'plta.'], function () {
-    Route::get('/', [\\Pterodactyl\\Http\\Controllers\\Admin\\Plta\\PltaController::class, 'index'])->name('index');
-    Route::post('/', [\\Pterodactyl\\Http\\Controllers\\Admin\\Plta\\PltaController::class, 'store'])->name('store');
-    Route::get('/logs', [\\Pterodactyl\\Http\\Controllers\\Admin\\Plta\\PltaController::class, 'logs'])->name('logs');
+Route::group(['prefix' => 'api/plta', 'as' => 'api.plta.'], function () {
+    Route::get('/', [\\Pterodactyl\\Http\\Controllers\\Admin\\Api\\PltaController::class, 'index'])->name('index');
+    Route::post('/', [\\Pterodactyl\\Http\\Controllers\\Admin\\Api\\PltaController::class, 'store'])->name('store');
+    Route::get('/logs', [\\Pterodactyl\\Http\\Controllers\\Admin\\Api\\PltaController::class, 'logs'])->name('logs');
 });
 ${MARKER_END}
 
 ROUTES"
-  ok "Routes ditambah (admin.plta.*)."
+  ok "Routes PLTA ditambah: admin.api.plta.*"
+fi
+
+# =========================
+# Sidebar button (route(), bukan URL)
+# Cari file sidebar/nav admin lalu inject item.
+# =========================
+SIDEBAR_FILE="$(grep -RIl --exclude-dir=node_modules --exclude-dir=vendor "admin\.api" "${PANEL_DIR}/resources/views" 2>/dev/null | head -n 1 || true)"
+
+if [ -n "${SIDEBAR_FILE}" ]; then
+  backup_if_exists "$SIDEBAR_FILE"
+  if grep -q "admin\.api\.plta\.index" "$SIDEBAR_FILE"; then
+    warn "Sidebar sudah ada button PLTA, skip."
+  else
+    # inject sebelum penutup </ul> pertama yang ketemu (aman buat banyak template)
+    spin "Patch sidebar button..." bash -c "perl -0777 -i -pe 's#</ul>#  <li>\n    <a href=\"{{ route(\\x27admin.api.plta.index\\x27) }}\">\n      <i class=\"fa fa-shield\"></i> <span>PLTA Logs</span>\n    </a>\n  </li>\n</ul>#s' '$SIDEBAR_FILE'"
+    ok "Sidebar button ditambah di: ${SIDEBAR_FILE}"
+  fi
+else
+  warn "Gagal auto-detect sidebar file. Tapi routes & page tetap jalan."
 fi
 
 hr
-ok "PLTA + Logs berhasil dipasang!"
-info "Open: ${BOLD}/admin/plta${NC}"
-info "Logs: ${BOLD}/admin/plta/logs${NC}"
-info "Next: jalankan migrate:"
-echo -e "${WHT}${BOLD}  cd ${PANEL_DIR} && php artisan migrate --force${NC}"
+ok "PLTA Logs berhasil dipasang!"
+info "Create : ${BOLD}/admin/api/plta${NC}"
+info "Logs   : ${BOLD}/admin/api/plta/logs${NC}"
+hr
+echo -e "${WHT}${BOLD}LANJUT (WAJIB):${NC}"
+echo -e "${WHT}${BOLD}  cd ${PANEL_DIR}${NC}"
+echo -e "${WHT}${BOLD}  php artisan migrate --force${NC}"
+echo -e "${WHT}${BOLD}  php artisan view:clear && php artisan route:clear${NC}"
 hr
 echo -e "${WHT}${BOLD}WM:${NC} ${CYN}Protect Panel By Dezz${NC}"
 hr

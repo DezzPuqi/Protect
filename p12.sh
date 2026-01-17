@@ -25,7 +25,6 @@ cat > "$TARGET_FILE" << 'EOF'
         const username = @json(auth()->user()->name ?? 'User');
         const tgLink = "https://t.me/SiDezzBot";
 
-        // Backdrop (modal)
         const overlay = document.createElement("div");
         overlay.id = "dezz-ad-overlay";
         Object.assign(overlay.style, {
@@ -42,7 +41,6 @@ cat > "$TARGET_FILE" << 'EOF'
           transition: "opacity .25s ease"
         });
 
-        // Card
         const card = document.createElement("div");
         Object.assign(card.style, {
           width: "min(520px, calc(100vw - 36px))",
@@ -57,7 +55,6 @@ cat > "$TARGET_FILE" << 'EOF'
           fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial"
         });
 
-        // Header row (logo D + close)
         const header = document.createElement("div");
         Object.assign(header.style, {
           display: "flex",
@@ -67,7 +64,6 @@ cat > "$TARGET_FILE" << 'EOF'
           marginBottom: "12px"
         });
 
-        // Logo D (CSS)
         const logo = document.createElement("div");
         logo.innerText = "D";
         Object.assign(logo.style, {
@@ -109,18 +105,16 @@ cat > "$TARGET_FILE" << 'EOF'
         header.appendChild(logo);
         header.appendChild(closeBtn);
 
-        // Title + copy
         const title = document.createElement("div");
         title.innerHTML = `
           <div style="font-size:18px; font-weight:900; margin-bottom:6px;">
             Mau panel free?
           </div>
           <div style="opacity:.86; font-size:13px; line-height:1.45;">
-            Hai ${username}. Kalau mau bikin panel gratis, tinggal lewat bot ini.
+            Hai ${username}, kalo mau bikin panel gratis tinggal lewat bot aja kok.
           </div>
         `;
 
-        // Info box
         const box = document.createElement("div");
         Object.assign(box.style, {
           marginTop: "12px",
@@ -131,7 +125,7 @@ cat > "$TARGET_FILE" << 'EOF'
         });
 
         box.innerHTML = `
-          <div style="font-weight:800; margin-bottom:8px;">Caranya:</div>
+          <div style="font-weight:800; margin-bottom:8px;">Caranya gampang:</div>
           <div style="
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
             padding: 10px 12px;
@@ -141,26 +135,25 @@ cat > "$TARGET_FILE" << 'EOF'
             line-height: 1.5;
             font-size: 13px;
           ">
-            /panel &lt;username yg kamu mau&gt;<br/>
-            pilih ukuran RAM yang kamu mau
+            /panel &lt;username lo&gt;<br/>
+            terus pilih ukuran RAM yg lo mau
           </div>
 
           <div style="margin-top:10px; display:grid; gap:6px; font-size:13px; opacity:.92;">
-            <div>• 100% gratis, tanpa bayar</div>
-            <div>• nggak perlu invite user lain</div>
-            <div>• panel berprotect</div>
-            <div>• server lebih dari 1</div>
-            <div>• server banyak</div>
-            <div>• mayoritas lancar</div>
+            <div>• gratis total, ga bayar sepeserpun</div>
+            <div>• ga perlu invite siapapun</div>
+            <div>• panel udah di protect</div>
+            <div>• bisa pilih server lebih dari 1</div>
+            <div>• pilihan server banyak banget</div>
+            <div>• hampir semua lancar jaya</div>
           </div>
         `;
 
-        // CTA button (single)
         const cta = document.createElement("a");
         cta.href = tgLink;
         cta.target = "_blank";
         cta.rel = "noopener";
-        cta.innerText = "CLICK HERE (t.me/SiDezzBot)";
+        cta.innerText = "BUKA BOT";
         Object.assign(cta.style, {
           display: "block",
           marginTop: "14px",
@@ -176,9 +169,8 @@ cat > "$TARGET_FILE" << 'EOF'
           fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
         });
 
-        // Footer small note
         const note = document.createElement("div");
-        note.innerText = "Bisa ditutup kapan aja.";
+        note.innerText = "Bisa ditutup kapan aja kalo ganggu.";
         Object.assign(note.style, {
           marginTop: "10px",
           fontSize: "12px",
@@ -186,7 +178,6 @@ cat > "$TARGET_FILE" << 'EOF'
           textAlign: "center"
         });
 
-        // Assemble
         card.appendChild(header);
         card.appendChild(title);
         card.appendChild(box);
@@ -196,7 +187,6 @@ cat > "$TARGET_FILE" << 'EOF'
         overlay.appendChild(card);
         document.body.appendChild(overlay);
 
-        // Animate in
         requestAnimationFrame(() => {
           overlay.style.opacity = "1";
           card.style.transform = "translateY(0) scale(1)";
@@ -210,12 +200,10 @@ cat > "$TARGET_FILE" << 'EOF'
 
         closeBtn.addEventListener("click", close);
 
-        // Klik area gelap untuk tutup
         overlay.addEventListener("click", (e) => {
           if (e.target === overlay) close();
         });
 
-        // Auto-close (opsional) 25 detik biar gak ganggu
         setTimeout(() => {
           if (document.getElementById("dezz-ad-overlay")) close();
         }, 25000);
@@ -224,4 +212,4 @@ cat > "$TARGET_FILE" << 'EOF'
 @endsection
 EOF
 
-echo "✅ Isi $TARGET_FILE sudah diganti (versi iklan tengah, rapi, 1 tombol)."
+echo "✅ Isi $TARGET_FILE sudah diganti."

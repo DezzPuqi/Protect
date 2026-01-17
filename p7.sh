@@ -1,36 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-# ==========================================================
-# Protect Panel By Dezz — OWNER-ONLY LOCK (ALL SERVER FEATURES)
-# ✅ TANPA PATCH KERNEL / TANPA PATCH ROUTES (biar gak 500)
-#
-# Cara kerja:
-# - Bikin middleware: OwnerOnlyServerAccess
-# - Middleware ini ngecek SEMUA request yang punya route param {server}
-#   => kalau bukan owner (kecuali Admin ID 1) LANGSUNG BLOCK di AWAL
-#   => console / files / power / schedules / backups / settings / db / dll IKUT KEKUNCI
-# - Log ke Activity server target:
-#   "User <username> baru saja mencoba mengakses server mu."
-#
-# Bonus:
-# - Kalau request accept HTML => tampil halaman HTML serem + WM.
-# ==========================================================
-
-PTERO_BASE="/var/www/pterodactyl"
+REMOTE_PATH="/var/www/pterodactyl/app/Http/Controllers/Api/Client/Servers/FileController.php"
 TIMESTAMP="$(date -u +"%Y-%m-%d-%H-%M-%S")"
-
-MIDDLEWARE_DIR="${PTERO_BASE}/app/Http/Middleware/ProtectPanelByDezz"
-MIDDLEWARE_FILE="${MIDDLEWARE_DIR}/OwnerOnlyServerAccess.php"
-
-CLIENT_API_CTRL="${PTERO_BASE}/app/Http/Controllers/Api/Client/ClientApiController.php"
-
-# (optional) kalau kemarin sempet 500 karena kernel/routes kepatch, kita restore backup terakhir kalau ada
-KERNEL_PATH="${PTERO_BASE}/app/Http/Kernel.php"
-ROUTES_PATH="${PTERO_BASE}/routes/api-client.php"
+BACKUP_PATH="${REMOTE_PATH}.bak_${TIMESTAMP}"
 
 # =========================
-# UI - Protect Panel By Dezz
+# UI - Protect Panel By Dezz (serem)
 # =========================
 NC="\033[0m"; BOLD="\033[1m"; DIM="\033[2m"
 RED="\033[31m"; GRN="\033[32m"; YLW="\033[33m"; BLU="\033[34m"; CYN="\033[36m"; WHT="\033[37m"
@@ -42,7 +18,7 @@ banner() {
   echo -e "${RED}${BOLD}<html>${NC}"
   echo -e "${RED}${BOLD}  <head><title>PROTECT PANEL</title></head>${NC}"
   echo -e "${RED}${BOLD}  <body>${NC}"
-  echo -e "${RED}${BOLD}    <h1>🩸 OWNER-ONLY SERVER SHIELD (ALL FEATURES LOCKED)</h1>${NC}"
+  echo -e "${RED}${BOLD}    <h1>🩸 FILE SHIELD: ACTIVE</h1>${NC}"
   echo -e "${WHT}${BOLD}    <p>WM: Protect Panel By Dezz</p>${NC}"
   echo -e "${RED}${BOLD}  </body>${NC}"
   echo -e "${RED}${BOLD}</html>${NC}"
@@ -75,197 +51,114 @@ on_error() {
   local code=$?
   echo
   fail "Installer gagal (exit code: $code)"
-  echo -e "${DIM}Cek permission + path: ${PTERO_BASE}${NC}"
+  echo -e "${DIM}Pastikan jalan sebagai root / permission tulis ke path target.${NC}"
   exit "$code"
 }
 trap on_error ERR
 
-backup_if_exists() {
-  local f="$1"
-  if [ -f "$f" ]; then
-    mv "$f" "${f}.bak_${TIMESTAMP}"
-    ok "Backup: ${DIM}${f}.bak_${TIMESTAMP}${NC}"
-  else
-    warn "File tidak ada: $(basename "$f")"
-  fi
-}
-
-restore_latest() {
-  local f="$1"
-  local latest
-  latest="$(ls -1t "${f}.bak_"* 2>/dev/null | head -n 1 || true)"
-  if [ -n "${latest}" ] && [ -f "${latest}" ]; then
-    mv "$latest" "$f"
-    ok "Restore: ${DIM}${f}${NC} (dari $(basename "$latest"))"
-  else
-    warn "Restore skip (backup gak ketemu): $(basename "$f")"
-  fi
-}
-
-patch_client_api_controller() {
-  # Inject middleware call into ClientApiController constructor without rewriting whole file.
-  # Insert line after first "{" of __construct.
-  local f="$CLIENT_API_CTRL"
-  local tmp
-  tmp="$(mktemp)"
-
-  if [ ! -f "$f" ]; then
-    fail "ClientApiController tidak ditemukan: $f"
-    exit 1
-  fi
-
-  if grep -q "OwnerOnlyServerAccess::class" "$f" || grep -q "ProtectPanelByDezz\\\\OwnerOnlyServerAccess" "$f"; then
-    warn "ClientApiController sudah dipatch, skip."
-    rm -f "$tmp"
-    return 0
-  fi
-
-  awk '
-    BEGIN { inctor=0; injected=0 }
-    {
-      line=$0
-      if (injected==0 && inctor==0 && line ~ /function __construct[[:space:]]*\(/) {
-        inctor=1
-        print line
-        next
-      }
-
-      if (injected==0 && inctor==1) {
-        # wait for the first opening brace of constructor
-        print line
-        if (line ~ /\{[[:space:]]*$/) {
-          print "        // 🔒 Protect Panel By Dezz: lock ALL {server} access (owner-only, admin id 1 bypass)"
-          print "        $this->middleware(\\\\Pterodactyl\\\\Http\\\\Middleware\\\\ProtectPanelByDezz\\\\OwnerOnlyServerAccess::class);"
-          injected=1
-          inctor=0
-        }
-        next
-      }
-
-      print line
-    }
-  ' "$f" > "$tmp"
-
-  mv "$tmp" "$f"
-  ok "Patch: middleware dipasang ke ClientApiController (tanpa Kernel/routes)."
-}
-
 banner
-info "Base     : ${BOLD}${PTERO_BASE}${NC}"
+info "Mode     : Installer"
+info "Target   : ${BOLD}${REMOTE_PATH}${NC}"
+info "Backup   : ${BOLD}${BACKUP_PATH}${NC}"
 info "Time UTC : ${BOLD}${TIMESTAMP}${NC}"
 hr
-info "Target 1 : ${BOLD}${MIDDLEWARE_FILE}${NC}"
-info "Target 2 : ${BOLD}${CLIENT_API_CTRL}${NC}"
+
+echo -e "${CYN}🚀${NC} Memasang proteksi Anti Akses Server File Controller + Activity Log (serem)"
 hr
 
-# OPTIONAL: restore kernel/routes kalau sebelumnya kepatch dan bikin 500
-info "Optional fix 500: restore Kernel/routes dari backup terakhir (kalau ada)..."
-restore_latest "$KERNEL_PATH"
-restore_latest "$ROUTES_PATH"
+if [ -f "$REMOTE_PATH" ]; then
+  spin "Backup file lama..." mv "$REMOTE_PATH" "$BACKUP_PATH"
+  ok "Backup dibuat: ${DIM}${BACKUP_PATH}${NC}"
+else
+  warn "File lama tidak ditemukan, skip backup."
+fi
+
+spin "Menyiapkan direktori..." mkdir -p "$(dirname "$REMOTE_PATH")"
+chmod 755 "$(dirname "$REMOTE_PATH")"
+ok "Direktori siap: $(dirname "$REMOTE_PATH")"
 hr
 
-# Backup target utama
-info "Backup file target..."
-backup_if_exists "$MIDDLEWARE_FILE"
-backup_if_exists "$CLIENT_API_CTRL"
+info "Menulis patch FileController (owner-only + admin id 1 bypass + log activity)..."
 hr
 
-spin "Menyiapkan folder middleware..." mkdir -p "$MIDDLEWARE_DIR"
-chmod 755 "$MIDDLEWARE_DIR"
-
-info "Menulis middleware OwnerOnlyServerAccess (ALL SERVER FEATURES LOCK)..."
-cat > "$MIDDLEWARE_FILE" <<'EOF'
+cat > "$REMOTE_PATH" << 'EOF'
 <?php
 
-namespace Pterodactyl\Http\Middleware\ProtectPanelByDezz;
+namespace Pterodactyl\Http\Controllers\Api\Client\Servers;
 
-use Closure;
+use Carbon\CarbonImmutable;
+use Illuminate\Http\Response;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Pterodactyl\Models\Server;
 use Pterodactyl\Facades\Activity;
+use Pterodactyl\Services\Nodes\NodeJWTService;
+use Pterodactyl\Repositories\Wings\DaemonFileRepository;
+use Pterodactyl\Transformers\Api\Client\FileObjectTransformer;
+use Pterodactyl\Http\Controllers\Api\Client\ClientApiController;
+use Pterodactyl\Http\Requests\Api\Client\Servers\Files\CopyFileRequest;
+use Pterodactyl\Http\Requests\Api\Client\Servers\Files\PullFileRequest;
+use Pterodactyl\Http\Requests\Api\Client\Servers\Files\ListFilesRequest;
+use Pterodactyl\Http\Requests\Api\Client\Servers\Files\ChmodFilesRequest;
+use Pterodactyl\Http\Requests\Api\Client\Servers\Files\DeleteFileRequest;
+use Pterodactyl\Http\Requests\Api\Client\Servers\Files\RenameFileRequest;
+use Pterodactyl\Http\Requests\Api\Client\Servers\Files\CreateFolderRequest;
+use Pterodactyl\Http\Requests\Api\Client\Servers\Files\CompressFilesRequest;
+use Pterodactyl\Http\Requests\Api\Client\Servers\Files\DecompressFilesRequest;
+use Pterodactyl\Http\Requests\Api\Client\Servers\Files\GetFileContentsRequest;
+use Pterodactyl\Http\Requests\Api\Client\Servers\Files\WriteFileContentRequest;
 
-class OwnerOnlyServerAccess
+class FileController extends ClientApiController
 {
-    public function handle(Request $request, Closure $next)
+    public function __construct(
+        private NodeJWTService $jwtService,
+        private DaemonFileRepository $fileRepository
+    ) {
+        parent::__construct();
+    }
+
+    /**
+     * 🔒 Protect Panel By Dezz:
+     * - Admin ID 1 bebas akses semua.
+     * - User lain hanya boleh akses server MILIKNYA.
+     * - Kalau coba intip server orang => BLOCK + Activity log pada server target.
+     */
+    private function checkServerAccess(Request $request, Server $server): void
     {
-        // Hanya enforce kalau route punya parameter "server"
-        $serverParam = $request->route('server');
-
-        // Route tanpa {server} => biarin lewat
-        if ($serverParam === null) {
-            return $next($request);
-        }
-
         $user = $request->user();
 
         if (!$user) {
-            return $this->deny($request, null, 'Unauthorized.');
+            $this->denyJson('Unauthorized.', 401);
         }
 
-        // Admin ID 1 bebas
+        // Admin (user id = 1) bebas akses semua
         if ((int) $user->id === 1) {
-            return $next($request);
+            return;
         }
 
-        // Resolve server object (biasanya sudah model binding)
-        $server = null;
-
-        if ($serverParam instanceof Server) {
-            $server = $serverParam;
-        } else {
-            // fallback lookup: uuidShort / uuid / id
-            $key = (string) $serverParam;
-            $server = Server::query()
-                ->where('uuidShort', $key)
-                ->orWhere('uuid', $key)
-                ->orWhere('id', $key)
-                ->first();
-        }
-
-        if (!$server) {
-            return $this->deny($request, null, 'Access denied.');
-        }
-
+        // Fallback owner detection (biar gak bolong kalau field beda)
         $ownerId = $server->owner_id
             ?? $server->user_id
             ?? ($server->owner?->id ?? null)
             ?? ($server->user?->id ?? null);
 
-        // Owner gak kebaca => block
+        // owner gak jelas => block
         if ($ownerId === null) {
             $this->logAttempt($request, $server, $user, 'Owner not detected');
-            return $this->deny($request, $server, 'Access denied.');
+            $this->denyJson('⛔ Access denied (owner not detected).', 403);
         }
 
-        // BUKAN owner => BLOCK TOTAL (console/files/power/dll ikut)
+        // server bukan milik user => block + log
         if ((int) $ownerId !== (int) $user->id) {
-            $this->logAttempt($request, $server, $user, 'Foreign server access blocked');
-            return $this->deny($request, $server, '⛔ Access denied (Protect Panel By Dezz).');
+            $this->logAttempt($request, $server, $user, 'Foreign server file access blocked');
+            $this->denyJson('⛔ Akses ditolak! Ini bukan server milikmu.', 403);
         }
-
-        return $next($request);
     }
 
-    private function deny(Request $request, ?Server $server, string $message)
-    {
-        $accept = (string) $request->header('accept', '');
-
-        // Kalau browser minta HTML (kadang panel), kasih page HTML "serem"
-        if (stripos($accept, 'text/html') !== false) {
-            $html = $this->denyHtml();
-            return response($html, 403)->header('Content-Type', 'text/html; charset=UTF-8');
-        }
-
-        // Default: JSON (API aman)
-        return response()->json([
-            'object' => 'error',
-            'attributes' => [
-                'status' => 403,
-                'message' => $message,
-            ],
-        ], 403);
-    }
-
+    /**
+     * Log ke Activity server target:
+     * "User <username> baru saja mencoba mengakses server mu."
+     */
     private function logAttempt(Request $request, Server $server, $user, string $reason): void
     {
         $username = $user->username
@@ -273,7 +166,7 @@ class OwnerOnlyServerAccess
             ?? $user->email
             ?? ('User#' . ($user->id ?? 'Unknown'));
 
-        Activity::event('server:shield.blocked')
+        Activity::event('server:file.unauthorized')
             ->subject($server)
             ->property('attempted_by_id', $user->id ?? null)
             ->property('attempted_by', $username)
@@ -283,117 +176,230 @@ class OwnerOnlyServerAccess
             ->log(sprintf('User %s baru saja mencoba mengakses server mu.', $username));
     }
 
-    private function denyHtml(): string
+    /**
+     * JSON deny (API, bukan HTML).
+     */
+    private function denyJson(string $message, int $status = 403): void
     {
-        return <<<'HTML'
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Access Denied - Protect Panel By Dezz</title>
-  <style>
-    :root { color-scheme: dark; }
-    body {
-      margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
-      background: radial-gradient(900px 520px at 25% 20%, rgba(255,0,0,.22), transparent 60%),
-                  radial-gradient(880px 560px at 80% 80%, rgba(0,170,255,.14), transparent 60%),
-                  #05060a;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      color:#eaeaf2;
+        abort(
+            response()->json([
+                'object' => 'error',
+                'attributes' => [
+                    'status' => $status,
+                    'message' => $message,
+                    'wm' => 'Protect Panel By Dezz',
+                ],
+            ], $status)
+        );
     }
-    .card {
-      width:min(920px, 92vw);
-      border:1px solid rgba(255,255,255,.08);
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-      border-radius:18px;
-      box-shadow: 0 22px 90px rgba(0,0,0,.60);
-      overflow:hidden;
-    }
-    .top {
-      padding:22px 22px 14px;
-      display:flex; gap:14px; align-items:center;
-      background: linear-gradient(90deg, rgba(255,0,0,.22), rgba(255,255,255,0));
-      border-bottom:1px solid rgba(255,255,255,.06);
-    }
-    .sig {
-      width:46px; height:46px; border-radius:14px;
-      display:grid; place-items:center;
-      background: rgba(255,0,0,.14);
-      border:1px solid rgba(255,0,0,.30);
-      box-shadow: 0 0 0 6px rgba(255,0,0,.06);
-      font-size:22px;
-    }
-    h1 { margin:0; font-size:18px; letter-spacing:.2px; }
-    .sub { margin-top:4px; color: rgba(234,234,242,.72); font-size:13px; }
-    .mid { padding:18px 22px 8px; }
-    .code {
-      margin:14px 0 6px;
-      padding:14px 14px;
-      border-radius:14px;
-      border:1px solid rgba(255,255,255,.08);
-      background: rgba(0,0,0,.25);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size:13px;
-      color:#f3f3ff;
-      line-height:1.5;
-      overflow:auto;
-    }
-    .bot {
-      display:flex; justify-content:space-between; align-items:center;
-      padding:14px 22px;
-      border-top:1px solid rgba(255,255,255,.06);
-      background: rgba(0,0,0,.18);
-      color: rgba(234,234,242,.70);
-      font-size:12px;
-    }
-    .wm { font-weight:800; color:#fff; }
-    .glow { text-shadow: 0 0 18px rgba(255,0,0,.38); }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="top">
-      <div class="sig">⛔</div>
-      <div>
-        <h1 class="glow">ACCESS DENIED — SERVER AREA LOCKED</h1>
-        <div class="sub">Owner-only access is enforced. Admin ID 1 bypass enabled.</div>
-      </div>
-    </div>
 
-    <div class="mid">
-      <div class="code">
-HTTP/1.1 403 Forbidden<br/>
-Rule: OwnerOnly + AdminID1Bypass<br/>
-Module: Client / Server<br/>
-WM: Protect Panel By Dezz
-      </div>
-    </div>
+    public function directory(ListFilesRequest $request, Server $server): array
+    {
+        $this->checkServerAccess($request, $server);
 
-    <div class="bot">
-      <div>Security Layer: <b>Dezz Shield</b> • Status: <span class="glow">ENABLED</span></div>
-      <div class="wm">Protect Panel By Dezz</div>
-    </div>
-  </div>
-</body>
-</html>
-HTML;
+        $contents = $this->fileRepository
+            ->setServer($server)
+            ->getDirectory($request->get('directory') ?? '/');
+
+        return $this->fractal->collection($contents)
+            ->transformWith($this->getTransformer(FileObjectTransformer::class))
+            ->toArray();
+    }
+
+    public function contents(GetFileContentsRequest $request, Server $server): Response
+    {
+        $this->checkServerAccess($request, $server);
+
+        $response = $this->fileRepository->setServer($server)->getContent(
+            $request->get('file'),
+            config('pterodactyl.files.max_edit_size')
+        );
+
+        Activity::event('server:file.read')->property('file', $request->get('file'))->log();
+
+        return new Response($response, Response::HTTP_OK, ['Content-Type' => 'text/plain']);
+    }
+
+    public function download(GetFileContentsRequest $request, Server $server): array
+    {
+        $this->checkServerAccess($request, $server);
+
+        $token = $this->jwtService
+            ->setExpiresAt(CarbonImmutable::now()->addMinutes(15))
+            ->setUser($request->user())
+            ->setClaims([
+                'file_path' => rawurldecode($request->get('file')),
+                'server_uuid' => $server->uuid,
+            ])
+            ->handle($server->node, $request->user()->id . $server->uuid);
+
+        Activity::event('server:file.download')->property('file', $request->get('file'))->log();
+
+        return [
+            'object' => 'signed_url',
+            'attributes' => [
+                'url' => sprintf(
+                    '%s/download/file?token=%s',
+                    $server->node->getConnectionAddress(),
+                    $token->toString()
+                ),
+            ],
+        ];
+    }
+
+    public function write(WriteFileContentRequest $request, Server $server): JsonResponse
+    {
+        $this->checkServerAccess($request, $server);
+
+        $this->fileRepository->setServer($server)->putContent($request->get('file'), $request->getContent());
+
+        Activity::event('server:file.write')->property('file', $request->get('file'))->log();
+
+        return new JsonResponse([], Response::HTTP_NO_CONTENT);
+    }
+
+    public function create(CreateFolderRequest $request, Server $server): JsonResponse
+    {
+        $this->checkServerAccess($request, $server);
+
+        $this->fileRepository
+            ->setServer($server)
+            ->createDirectory($request->input('name'), $request->input('root', '/'));
+
+        Activity::event('server:file.create-directory')
+            ->property('name', $request->input('name'))
+            ->property('directory', $request->input('root'))
+            ->log();
+
+        return new JsonResponse([], Response::HTTP_NO_CONTENT);
+    }
+
+    public function rename(RenameFileRequest $request, Server $server): JsonResponse
+    {
+        $this->checkServerAccess($request, $server);
+
+        $this->fileRepository
+            ->setServer($server)
+            ->renameFiles($request->input('root'), $request->input('files'));
+
+        Activity::event('server:file.rename')
+            ->property('directory', $request->input('root'))
+            ->property('files', $request->input('files'))
+            ->log();
+
+        return new JsonResponse([], Response::HTTP_NO_CONTENT);
+    }
+
+    public function copy(CopyFileRequest $request, Server $server): JsonResponse
+    {
+        $this->checkServerAccess($request, $server);
+
+        $this->fileRepository
+            ->setServer($server)
+            ->copyFile($request->input('location'));
+
+        Activity::event('server:file.copy')->property('file', $request->input('location'))->log();
+
+        return new JsonResponse([], Response::HTTP_NO_CONTENT);
+    }
+
+    public function compress(CompressFilesRequest $request, Server $server): array
+    {
+        $this->checkServerAccess($request, $server);
+
+        $file = $this->fileRepository->setServer($server)->compressFiles(
+            $request->input('root'),
+            $request->input('files')
+        );
+
+        Activity::event('server:file.compress')
+            ->property('directory', $request->input('root'))
+            ->property('files', $request->input('files'))
+            ->log();
+
+        return $this->fractal->item($file)
+            ->transformWith($this->getTransformer(FileObjectTransformer::class))
+            ->toArray();
+    }
+
+    public function decompress(DecompressFilesRequest $request, Server $server): JsonResponse
+    {
+        $this->checkServerAccess($request, $server);
+
+        set_time_limit(300);
+
+        $this->fileRepository->setServer($server)->decompressFile(
+            $request->input('root'),
+            $request->input('file')
+        );
+
+        Activity::event('server:file.decompress')
+            ->property('directory', $request->input('root'))
+            ->property('files', $request->input('file'))
+            ->log();
+
+        return new JsonResponse([], JsonResponse::HTTP_NO_CONTENT);
+    }
+
+    public function delete(DeleteFileRequest $request, Server $server): JsonResponse
+    {
+        $this->checkServerAccess($request, $server);
+
+        $this->fileRepository->setServer($server)->deleteFiles(
+            $request->input('root'),
+            $request->input('files')
+        );
+
+        Activity::event('server:file.delete')
+            ->property('directory', $request->input('root'))
+            ->property('files', $request->input('files'))
+            ->log();
+
+        return new JsonResponse([], Response::HTTP_NO_CONTENT);
+    }
+
+    public function chmod(ChmodFilesRequest $request, Server $server): JsonResponse
+    {
+        $this->checkServerAccess($request, $server);
+
+        $this->fileRepository->setServer($server)->chmodFiles(
+            $request->input('root'),
+            $request->input('files')
+        );
+
+        return new JsonResponse([], Response::HTTP_NO_CONTENT);
+    }
+
+    public function pull(PullFileRequest $request, Server $server): JsonResponse
+    {
+        $this->checkServerAccess($request, $server);
+
+        $this->fileRepository->setServer($server)->pull(
+            $request->input('url'),
+            $request->input('directory'),
+            $request->safe(['filename', 'use_header', 'foreground'])
+        );
+
+        Activity::event('server:file.pull')
+            ->property('directory', $request->input('directory'))
+            ->property('url', $request->input('url'))
+            ->log();
+
+        return new JsonResponse([], Response::HTTP_NO_CONTENT);
     }
 }
 EOF
 
-chmod 644 "$MIDDLEWARE_FILE"
-ok "Middleware dibuat: ${BOLD}${MIDDLEWARE_FILE}${NC}"
-hr
+spin "Set permission file..." chmod 644 "$REMOTE_PATH"
 
-info "Patch ClientApiController: pasang middleware untuk SEMUA controller client API..."
-patch_client_api_controller
-chmod 644 "$CLIENT_API_CTRL"
 hr
-
-ok "✅ SELESAI!"
-info "Hasil: SEMUA fitur server (console/files/power/db/backups/schedules/dll) keblok kalau bukan owner."
-info "Admin: ${BOLD}ID 1 bypass${NC}"
-info "Log  : Activity server target => ${BOLD}User <username> baru saja mencoba mengakses server mu.${NC}"
+ok "Proteksi Anti Akses Server File Controller berhasil dipasang!"
+info "Lokasi : ${BOLD}${REMOTE_PATH}${NC}"
+if [ -f "$BACKUP_PATH" ]; then
+  info "Backup : ${BOLD}${BACKUP_PATH}${NC}"
+else
+  info "Backup : ${DIM}(tidak ada file sebelumnya)${NC}"
+fi
+info "Log    : Activity server target -> ${BOLD}User <username> baru saja mencoba mengakses server mu.${NC}"
 echo -e "${WHT}${BOLD}WM:${NC} ${CYN}Protect Panel By Dezz${NC}"
 hr

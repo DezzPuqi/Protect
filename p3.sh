@@ -125,7 +125,7 @@ class LocationController extends Controller
     }
 
     /**
-     * HTML deny page (biar ga polos).
+     * HTML deny page (SAMA KAYAK LOCK NEST).
      */
     private function denyHtml()
     {

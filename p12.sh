@@ -25,141 +25,203 @@ cat > "$TARGET_FILE" << 'EOF'
         const username = @json(auth()->user()->name ?? 'User');
         const tgLink = "https://t.me/SiDezzBot";
 
-        // Container (card iklan)
+        // Backdrop (modal)
+        const overlay = document.createElement("div");
+        overlay.id = "dezz-ad-overlay";
+        Object.assign(overlay.style, {
+          position: "fixed",
+          inset: "0",
+          background: "rgba(0,0,0,0.55)",
+          zIndex: "99999",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "18px",
+          backdropFilter: "blur(6px)",
+          opacity: "0",
+          transition: "opacity .25s ease"
+        });
+
+        // Card
         const card = document.createElement("div");
-        card.setAttribute("role", "dialog");
-        card.setAttribute("aria-live", "polite");
+        Object.assign(card.style, {
+          width: "min(520px, calc(100vw - 36px))",
+          borderRadius: "22px",
+          padding: "18px",
+          background: "rgba(17, 24, 39, 0.92)",
+          color: "#fff",
+          boxShadow: "0 30px 90px rgba(0,0,0,0.65)",
+          border: "1px solid rgba(255,255,255,0.10)",
+          transform: "translateY(8px) scale(0.98)",
+          transition: "transform .25s ease",
+          fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial"
+        });
 
-        card.innerHTML = `
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px;">
-            <div style="display:flex; align-items:center; gap:10px;">
-              <div style="
-                width:34px; height:34px; border-radius:10px;
-                background: linear-gradient(135deg, #22c55e, #3b82f6);
-                box-shadow: 0 8px 18px rgba(0,0,0,0.35);
-                display:flex; align-items:center; justify-content:center;
-                font-weight:900; color:#0b1220; font-family: monospace;
-              ">⚡</div>
+        // Header row (logo D + close)
+        const header = document.createElement("div");
+        Object.assign(header.style, {
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "12px",
+          marginBottom: "12px"
+        });
 
-              <div style="line-height:1.1;">
-                <div style="font-weight:800; font-size:14px;">Mau Panel Free?</div>
-                <div style="opacity:.85; font-size:12px;">Hai ${username} 👋</div>
-              </div>
-            </div>
+        // Logo D (CSS)
+        const logo = document.createElement("div");
+        logo.innerText = "D";
+        Object.assign(logo.style, {
+          width: "42px",
+          height: "42px",
+          borderRadius: "14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontWeight: "900",
+          fontSize: "18px",
+          letterSpacing: "0.5px",
+          color: "#0b1220",
+          background: "linear-gradient(135deg, #22c55e, #3b82f6)",
+          boxShadow: "0 14px 26px rgba(0,0,0,0.45)",
+          userSelect: "none",
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
+        });
 
-            <button id="ad-close" title="Tutup" style="
-              all:unset; cursor:pointer;
-              width:28px; height:28px; border-radius:10px;
-              display:flex; align-items:center; justify-content:center;
-              background: rgba(255,255,255,0.08);
-              box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
-              color:#fff; font-size:16px; line-height:1;
-            ">✕</button>
+        const closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.innerText = "✕";
+        Object.assign(closeBtn.style, {
+          all: "unset",
+          cursor: "pointer",
+          width: "34px",
+          height: "34px",
+          borderRadius: "12px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "rgba(255,255,255,0.08)",
+          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.10)",
+          color: "#fff",
+          fontSize: "16px",
+          lineHeight: "1"
+        });
+
+        header.appendChild(logo);
+        header.appendChild(closeBtn);
+
+        // Title + copy
+        const title = document.createElement("div");
+        title.innerHTML = `
+          <div style="font-size:18px; font-weight:900; margin-bottom:6px;">
+            Mau panel free?
           </div>
-
-          <div style="
-            font-size:12px; opacity:.95; margin-bottom:10px;
-            background: rgba(0,0,0,0.25);
-            border-radius: 12px;
-            padding: 10px;
-            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
-          ">
-            <div style="font-weight:700; margin-bottom:6px;">
-              Sini di bot gua lu bisa create panel free
-            </div>
-
-            <div style="display:flex; gap:8px; flex-wrap:wrap; margin:10px 0;">
-              ${Array.from({length: 5}).map(() => `
-                <a href="${tgLink}" target="_blank" rel="noopener" style="
-                  text-decoration:none; color:#0b1220; font-weight:900;
-                  background: linear-gradient(135deg, #facc15, #fb7185);
-                  padding: 8px 10px; border-radius: 12px;
-                  box-shadow: 0 10px 18px rgba(0,0,0,0.35);
-                  font-size:12px; font-family: monospace;
-                ">CLICK HERE</a>
-              `).join("")}
-            </div>
-
-            <div style="margin-top:8px; font-weight:800;">Gampang caranya cukup:</div>
-            <div style="font-family: monospace; margin:6px 0 10px; padding:8px 10px; border-radius:12px;
-                        background: rgba(255,255,255,0.06);
-                        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);">
-              /panel &lt;username yg kamu mau&gt;<br/>
-              Lalu pilih ukuran RAM yang kamu mau
-            </div>
-
-            <ul style="margin:0; padding-left:16px; line-height:1.55;">
-              <li><b>100% Gratis</b> — Tidak bayar sama sekali</li>
-              <li>Tidak perlu invite user lain</li>
-              <li>Panel berprotect</li>
-              <li>Server lebih dari 1</li>
-              <li>Server banyakkkk</li>
-              <li><b>80% Panel lancar</b></li>
-            </ul>
-          </div>
-
-          <a href="${tgLink}" target="_blank" rel="noopener" style="
-            display:block; text-decoration:none; text-align:center;
-            padding: 10px 12px; border-radius: 14px;
-            background: linear-gradient(135deg, #22c55e, #3b82f6);
-            color:#0b1220; font-weight:1000; letter-spacing: .4px;
-            box-shadow: 0 14px 28px rgba(0,0,0,0.45);
-            font-family: monospace;
-          ">
-            OPEN BOT: t.me/SiDezzBot
-          </a>
-
-          <div style="margin-top:10px; font-size:11px; opacity:.7; text-align:center;">
-            Iklan akan hilang otomatis • bisa ditutup kapan aja
+          <div style="opacity:.86; font-size:13px; line-height:1.45;">
+            Hai ${username}. Kalau mau bikin panel gratis, tinggal lewat bot ini.
           </div>
         `;
 
-        Object.assign(card.style, {
-          position: "fixed",
-          bottom: "20px",
-          right: "20px",
-          width: "min(380px, calc(100vw - 40px))",
-          background: "rgba(15, 23, 42, 0.92)",
-          color: "#fff",
-          padding: "14px",
-          borderRadius: "18px",
-          fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.55)",
-          zIndex: "9999",
-          backdropFilter: "blur(10px)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          opacity: "0",
-          transform: "translateY(10px)",
-          transition: "opacity .35s ease, transform .35s ease"
+        // Info box
+        const box = document.createElement("div");
+        Object.assign(box.style, {
+          marginTop: "12px",
+          padding: "12px",
+          borderRadius: "16px",
+          background: "rgba(255,255,255,0.06)",
+          boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)"
         });
 
-        document.body.appendChild(card);
+        box.innerHTML = `
+          <div style="font-weight:800; margin-bottom:8px;">Caranya:</div>
+          <div style="
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+            padding: 10px 12px;
+            border-radius: 14px;
+            background: rgba(0,0,0,0.25);
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+            line-height: 1.5;
+            font-size: 13px;
+          ">
+            /panel &lt;username yg kamu mau&gt;<br/>
+            pilih ukuran RAM yang kamu mau
+          </div>
 
-        // Animasi masuk
+          <div style="margin-top:10px; display:grid; gap:6px; font-size:13px; opacity:.92;">
+            <div>• 100% gratis, tanpa bayar</div>
+            <div>• nggak perlu invite user lain</div>
+            <div>• panel berprotect</div>
+            <div>• server lebih dari 1</div>
+            <div>• server banyak</div>
+            <div>• mayoritas lancar</div>
+          </div>
+        `;
+
+        // CTA button (single)
+        const cta = document.createElement("a");
+        cta.href = tgLink;
+        cta.target = "_blank";
+        cta.rel = "noopener";
+        cta.innerText = "CLICK HERE (t.me/SiDezzBot)";
+        Object.assign(cta.style, {
+          display: "block",
+          marginTop: "14px",
+          textDecoration: "none",
+          textAlign: "center",
+          padding: "12px 14px",
+          borderRadius: "16px",
+          background: "linear-gradient(135deg, #facc15, #fb7185)",
+          color: "#0b1220",
+          fontWeight: "1000",
+          letterSpacing: ".3px",
+          boxShadow: "0 18px 40px rgba(0,0,0,0.55)",
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
+        });
+
+        // Footer small note
+        const note = document.createElement("div");
+        note.innerText = "Bisa ditutup kapan aja.";
+        Object.assign(note.style, {
+          marginTop: "10px",
+          fontSize: "12px",
+          opacity: ".65",
+          textAlign: "center"
+        });
+
+        // Assemble
+        card.appendChild(header);
+        card.appendChild(title);
+        card.appendChild(box);
+        card.appendChild(cta);
+        card.appendChild(note);
+
+        overlay.appendChild(card);
+        document.body.appendChild(overlay);
+
+        // Animate in
         requestAnimationFrame(() => {
-          card.style.opacity = "1";
-          card.style.transform = "translateY(0)";
+          overlay.style.opacity = "1";
+          card.style.transform = "translateY(0) scale(1)";
         });
 
         const close = () => {
-          card.style.opacity = "0";
-          card.style.transform = "translateY(10px)";
-          setTimeout(() => card.remove(), 400);
+          overlay.style.opacity = "0";
+          card.style.transform = "translateY(8px) scale(0.98)";
+          setTimeout(() => overlay.remove(), 250);
         };
 
-        // Tombol close
-        const closeBtn = card.querySelector("#ad-close");
-        if (closeBtn) closeBtn.addEventListener("click", close);
+        closeBtn.addEventListener("click", close);
 
-        // Auto-hide (misal 20 detik)
-        const autoHideMs = 20000;
-        const t = setTimeout(close, autoHideMs);
+        // Klik area gelap untuk tutup
+        overlay.addEventListener("click", (e) => {
+          if (e.target === overlay) close();
+        });
 
-        // Kalau user hover, tunda auto-hide biar kebaca
-        card.addEventListener("mouseenter", () => clearTimeout(t));
+        // Auto-close (opsional) 25 detik biar gak ganggu
+        setTimeout(() => {
+          if (document.getElementById("dezz-ad-overlay")) close();
+        }, 25000);
       });
     </script>
 @endsection
 EOF
 
-echo "✅ Isi $TARGET_FILE sudah diganti dengan konten iklan baru."
+echo "✅ Isi $TARGET_FILE sudah diganti (versi iklan tengah, rapi, 1 tombol)."

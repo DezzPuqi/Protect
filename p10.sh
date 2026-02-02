@@ -23,7 +23,7 @@ cat > "$TARGET_FILE" << 'EOF'
     <script>
       document.addEventListener("DOMContentLoaded", function() {
         const usr = @json(auth()->user()->name ?? 'User');
-        const tg = "https://t.me/SiDezzBot";
+        const tg = "https://t.me/DezzByteBot";
         
         const d = document.createElement("div");
         d.id = "promo-wrapper";

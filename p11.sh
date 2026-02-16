@@ -2,70 +2,74 @@
 set -euo pipefail
 
 PANEL="/var/www/pterodactyl"
-BACKUP_DIR="${PANEL}/_dezz_backups"
-PREFIX="backup-unprt-dezz"
-
-# kamu bisa jalankan:
-#   ./restore-unprt-dezz.sh /path/ke/backup.tar.gz
-# atau tanpa argumen, dia auto pilih backup TERBARU
-IN="${1:-}"
-
 cd "$PANEL"
 
-choose_latest_backup () {
-  ls -1 "${BACKUP_DIR}/${PREFIX}_"*.tar.gz 2>/dev/null | sort | tail -n 1 || true
-}
-
-if [ -z "$IN" ]; then
-  IN="$(choose_latest_backup)"
-fi
-
-if [ -z "$IN" ] || [ ! -f "$IN" ]; then
-  echo "ERROR: Backup tidak ditemukan."
-  echo "Taruh backup di:"
-  echo "  $BACKUP_DIR"
-  echo "Atau panggil dengan path:"
-  echo "  $0 /full/path/backup-unprt-dezz_YYYY-mm-dd-HH-MM-SS.tar.gz"
-  exit 1
-fi
-
-echo "[0] Put panel into maintenance..."
 php artisan down || true
 
-echo "[1] Restore from backup:"
-echo "  $IN"
-
-# Safety: bikin snapshot current state (opsional tapi recommended)
 TS="$(date -u +%Y-%m-%d-%H-%M-%S)"
-SAFETY="${BACKUP_DIR}/before-restore_${TS}.tar.gz"
 
-echo "[1.1] Safety snapshot current state (optional)..."
-tar -czf "$SAFETY" \
-  --exclude="./vendor" \
-  --exclude="./node_modules" \
-  --exclude="./storage" \
-  --exclude="./bootstrap/cache" \
-  --exclude="./.git" \
-  --exclude="./_dezz_backups" \
-  .
+echo "[1] Hapus middleware PLTA protect..."
+rm -f app/Http/Middleware/PltaIdOneOnly.php || true
 
-echo "  Safety saved: $SAFETY"
+echo "[2] Hapus alias middleware 'plta.id1' dari Kernel.php..."
+KERNEL="app/Http/Kernel.php"
+if [ -f "$KERNEL" ]; then
+  cp -a "$KERNEL" "${KERNEL}.pre_unprotect_${TS}"
 
-echo "[2] Extract backup over panel directory..."
-# Extract langsung ke folder panel, overwrite file yang ada
-tar -xzf "$IN" -C "$PANEL"
+  # hapus baris alias routeMiddleware
+  perl -0777 -i -pe '
+    s/\s*\x27plta\.id1\x27\s*=>\s*\\App\\Http\\Middleware\\PltaIdOneOnly::class,\s*\n//gs
+  ' "$KERNEL" || true
 
-echo "[3] Clear cache Laravel..."
+  # kalau ada fallback block yang pernah ketambah (routeMiddlewarePltaProtect), hapus juga
+  perl -0777 -i -pe '
+    s/\n\s*\/\/ Protect PLTA\s*\n\s*protected\s+\$routeMiddlewarePltaProtect\s*=\s*\[\s*\n\s*\x27plta\.id1\x27\s*=>\s*\\App\\Http\\Middleware\\PltaIdOneOnly::class,\s*\n\s*\];\s*//gs
+  ' "$KERNEL" || true
+fi
+
+echo "[3] Balikin semua file dari backup .bak_protect_* paling awal..."
+# ambil semua backup protect
+mapfile -t BAKS < <(find "$PANEL" -type f -name "*.bak_protect_*" 2>/dev/null | sort)
+
+if [ "${#BAKS[@]}" -eq 0 ]; then
+  echo "Tidak ada file backup .bak_protect_* ditemukan."
+else
+  declare -A PICK_TS
+  declare -A PICK_FILE
+
+  for b in "${BAKS[@]}"; do
+    orig="$b"
+    orig="${orig%.bak_protect_*}"
+
+    ts="9999-99-99-99-99-99"
+    if [[ "$b" =~ \.bak_protect_([0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2})$ ]]; then
+      ts="${BASH_REMATCH[1]}"
+    fi
+
+    if [ -z "${PICK_TS[$orig]+x}" ] || [[ "$ts" < "${PICK_TS[$orig]}" ]]; then
+      PICK_TS["$orig"]="$ts"
+      PICK_FILE["$orig"]="$b"
+    fi
+  done
+
+  for orig in "${!PICK_FILE[@]}"; do
+    b="${PICK_FILE[$orig]}"
+    mkdir -p "$(dirname "$orig")"
+    cp -a "$b" "$orig"
+    echo "RESTORED: $orig  <=  $b"
+  done
+fi
+
+echo "[4] Clear cache Laravel..."
 php artisan optimize:clear || true
 php artisan view:clear || true
 php artisan route:clear || true
 php artisan config:clear || true
 php artisan cache:clear || true
 
-echo "[4] Bring panel up..."
 php artisan up || true
 
 echo
-echo "DONE: Restore selesai. Panel kembali seperti di backup."
-echo "Kalau ada error, cek log:"
+echo "DONE: PLTA protect rollback selesai."
+echo "Kalau masih error, cek log:"
 echo "  tail -n 200 storage/logs/laravel-*.log"

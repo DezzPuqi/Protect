@@ -105,24 +105,91 @@ class ServerDeletionService
     {
         $user = Auth::user();
 
-        // 🔒 Proteksi:
-        // - Admin ID = 1 boleh menghapus server siapa saja.
-        // - Selain itu, user biasa hanya boleh menghapus server MILIKNYA SENDIRI.
-        // - Jika owner tidak terdeteksi dan user bukan admin, tolak.
+        /**
+         * 🔒 Proteksi:
+         * - Admin ID = 1 boleh menghapus server siapa saja.
+         * - Selain itu, user biasa hanya boleh menghapus server MILIKNYA SENDIRI.
+         * - Jika owner tidak terdeteksi dan user bukan admin, tolak.
+         */
         if ($user) {
             if ($user->id !== 1) {
+
                 // Fallback deteksi owner (beberapa field umum).
                 $ownerId = $server->owner_id
                     ?? $server->user_id
                     ?? ($server->owner?->id ?? null)
                     ?? ($server->user?->id ?? null);
 
+                // Ambil nama owner untuk dimasukin ke pesan.
+                $ownerName = $server->owner?->name
+                    ?? $server->user?->name
+                    ?? $server->owner?->username
+                    ?? $server->user?->username
+                    ?? 'user';
+
+                // Kalau owner gak kebaca dan user bukan admin -> tolak (pakai card juga).
                 if ($ownerId === null) {
-                    throw new DisplayException('Akses ditolak: informasi pemilik server tidak tersedia.');
+                    $html = '
+<div style="
+  border: 1px solid rgba(255, 0, 0, .25);
+  background: rgba(255, 0, 0, .06);
+  padding: 16px;
+  border-radius: 12px;
+  margin: 10px 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+">
+  <div style="font-weight: 800; font-size: 16px; margin-bottom: 6px;">🚫 Akses Ditolak</div>
+  <div style="line-height: 1.5;">
+    Owner server tidak bisa dideteksi. Kalau kamu bukan <b>ID 1</b>, ya gak bisa ngapa-ngapain 😭
+  </div>
+  <div style="margin-top: 10px; font-size: 12px; opacity: .75;">
+    Tips: pastikan relasi owner/server kebaca di database/panel.
+  </div>
+</div>';
+                    throw new DisplayException($html);
                 }
 
+                // Jika bukan owner -> TOLAK dengan HTML card “rusuh” versi kamu.
                 if ($ownerId !== $user->id) {
-                    throw new DisplayException('❌Akses ditolak: Anda hanya dapat menghapus server milik Anda sendiri');
+
+                    // Escape sederhana biar nama owner gak bikin HTML aneh.
+                    $safeOwner = htmlspecialchars((string) $ownerName, ENT_QUOTES, 'UTF-8');
+
+                    $html = '
+<div style="
+  border: 1px solid rgba(255, 0, 0, .25);
+  background: rgba(255, 0, 0, .06);
+  padding: 16px;
+  border-radius: 12px;
+  margin: 10px 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+">
+  <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+    <div style="font-size: 22px;">🛑</div>
+    <div style="font-weight: 900; font-size: 16px;">Woii! Lu siapa? 😤</div>
+  </div>
+
+  <div style="line-height: 1.55; font-size: 14px;">
+    Mau apus server nya <b>' . $safeOwner . '</b>?<br>
+    Lu aja bukan <b>ID 1</b> mau apus server orang 🤨
+  </div>
+
+  <div style="
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: rgba(0,0,0,.04);
+    border-radius: 10px;
+    font-weight: 700;
+  ">
+    Jangan rusuh dekk 😇
+  </div>
+
+  <div style="margin-top: 10px; font-size: 12px; opacity: .75;">
+    Rule: cuma <b>Admin (ID 1)</b> yang boleh hapus server orang lain.
+  </div>
+</div>';
+
+                    throw new DisplayException($html);
                 }
             }
             // jika $user->id === 1, lanjutkan (super admin)
